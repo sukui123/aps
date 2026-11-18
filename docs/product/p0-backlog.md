@@ -208,25 +208,21 @@
 
 ---
 
-## 5. P0 必要接口清单
+## 5. 接口清单
 
-| 接口 | 方法 | 说明 |
-|---|---|---|
-| `/api/orders` | GET/POST | 订单查询、新建 |
-| `/api/orders/sync` | POST | 触发 ERP 同步 |
-| `/api/orders/{id}/split` | POST | 订单拆分 |
-| `/api/master/resources` | GET/POST/PUT | 资源维护 |
-| `/api/master/routings` | GET/POST/PUT | 工艺路线 |
-| `/api/master/calendars` | GET/POST/PUT | 日历班次 |
-| `/api/scheduling/runs` | POST | 发起排产 |
-| `/api/scheduling/runs/{id}` | GET | 进度与结果 |
-| `/api/scheduling/runs/{id}/cancel` | POST | 取消 |
-| `/api/plans/{id}/tasks` | GET/PATCH | 甘特任务查询与调整 |
-| `/api/plans/{id}/validate` | POST | 发布前校验 |
-| `/api/plans/{id}/publish` | POST | 发布 |
-| `/api/plans/{id}/dispatch` | POST | 下达 MES |
-| `/api/analysis/load` | GET | 负荷分析 |
-| `/api/analysis/unscheduled` | GET | 未排清单 |
+完整的 P0 接口契约（约 70 个端点，按域分组、含写操作语义与幂等约定）见
+[技术方案 §5](../tech/technical-design.md#52-接口清单p0-完整版)，
+功能 ↔ 页面 ↔ 接口 ↔ 数据表的逐一对应见
+[P0 需求追溯矩阵](./traceability-matrix.md)。
+
+本文件不再维护第二份接口列表，避免两处口径发散。关键写接口约定：
+
+| 接口 | 约定 |
+|---|---|
+| `POST /scheduling/runs` | 必须带 `Idempotency-Key`；同工厂同时只允许一个 RUNNING/QUEUED |
+| `PATCH /plans/{id}/tasks/{taskId}` | `?mode=check\|commit`；单任务试算、冲突拒绝、不自动级联 |
+| `POST /plans/{id}/publish` | 前置：审批通过 + 校验无阻断；发布后版本冻结 |
+| `POST /plans/{id}/dispatch` | 必须带 `Idempotency-Key`，失败可重试不产生重复工单 |
 
 ---
 

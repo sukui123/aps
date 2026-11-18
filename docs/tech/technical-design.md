@@ -2,7 +2,7 @@
 
 > 版本：v0.1
 > 对应：[产品设计](../product/aps-product-design.md) · [P0 功能清单](../product/p0-backlog.md)
-> 目标：把 P0 的 46 项 Must 功能落成可实现的技术方案——技术栈、数据模型、引擎算法、接口契约、性能边界。
+> 目标：把 P0 的 45 项 Must 功能落成可实现的技术方案——技术栈、数据模型、引擎算法、接口契约、性能边界。
 
 ---
 
@@ -441,31 +441,153 @@ P0 五类硬约束：工序顺序、资源互斥、资源日历、物料齐套�
 - 时间：ISO-8601 带时区，如 `2024-11-18T08:00:00+08:00`
 - 错误码：`ORD_001`、`CAP_005` 等，与未排原因码共用一套字典
 
-### 5.2 核心接口
+### 5.2 接口清单（P0 完整版）
+
+> 与 [需求追溯矩阵](../product/traceability-matrix.md) 一一对应。所有路径前缀 `/api/v1`。
+
+**认证与用户（E7）**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/auth/login` | 登录，返回 access/refresh token |
+| POST | `/auth/logout` | 登出，撤销 refresh token |
+| POST | `/auth/refresh` | 刷新 token |
+| GET | `/auth/me` | 当前用户与权限集合 |
+| GET/POST | `/users` | 用户列表 / 新建 |
+| PUT | `/users/{id}` | 修改用户 |
+| POST | `/users/{id}/reset-password` | 重置密码 |
+| PUT | `/users/{id}/data-scopes` | 设置工厂/车间数据权限 |
+| GET | `/roles` | 角色列表 |
+| PUT | `/roles/{id}/permissions` | 设置角色功能权限 |
+| GET | `/permissions` | 权限点列表 |
+
+**主数据与建模（E1）**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET/POST | `/master/resources` | 资源列表 / 新建 |
+| GET | `/master/resources/tree` | 资源树（车间→工作中心→设备） |
+| PUT | `/master/resources/{id}` | 更新资源（能力、产能、效率） |
+| GET/POST | `/master/items` | 物料列表 / 新建 |
+| PUT | `/master/items/{id}` | 更新物料（含产品族、批量） |
+| GET/POST | `/master/routings` | 工艺路线列表 / 新建 |
+| PUT | `/master/routings/{id}` | 更新路线 |
+| PUT | `/master/routings/{id}/operations` | 批量保存工序与前后置关系 |
+| PUT | `/master/operations/{id}` | 更新工时、准备时间、资源组 |
+| GET/PUT | `/master/setup-matrix` | 换型矩阵批量查询 / 保存 |
+| GET/POST/PUT | `/master/calendars` | 日历、班次、工作日 |
+| GET/POST | `/master/downtimes` | 停机与维护窗口 |
+| GET/POST | `/master/bom` | BOM 列表 / 新建 |
+| GET | `/master/import/template` | 下载 Excel 模板 |
+| POST | `/master/import` | 导入，返回校验报告任务 id |
+| GET | `/master/import/{id}/errors` | 导入错误明细 |
+| GET | `/master/validate` | 主数据完整性体检结果 |
+
+**需求与订单（E2）**
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/orders/sync` | 触发 ERP 同步，返回任务 id |
-| GET | `/orders` | 分页查询，支持 status/dueFrom/dueTo/priority/keyword |
-| GET | `/orders/{id}` | 详情（含工艺展开、齐套、计划结果） |
-| POST | `/orders/{id}/split` | 拆分，body `{items:[{qty,dueDate}]}` |
+| GET | `/orders/sync/{taskId}` | 同步任务状态与结果 |
+| POST | `/orders/import` | Excel 导入订单 |
+| GET/POST | `/orders` | 分页查询 / 新建 |
+| GET | `/orders/{id}` | 详情（工艺展开、齐套、排产结果） |
+| GET | `/orders/{id}/status` | 派生状态（已排/已发布从生效版本计算） |
+| GET | `/orders/{id}/material-requirements` | 齐套明细与缺口 |
 | PUT | `/orders/{id}/priority` | 改优先级 |
-| GET | `/master/resources/tree` | 资源树 |
-| PUT | `/master/resources/{id}` | 更新资源 |
-| POST | `/master/import` | Excel 导入，返回校验报告 |
-| POST | `/scheduling/runs` | 发起排产，body 为 `EngineParams` |
-| GET | `/scheduling/runs/{id}` | 进度与状态 |
-| POST | `/scheduling/runs/{id}/cancel` | 取消 |
-| GET | `/plans/{id}/tasks` | 甘特数据（时间窗、资源过滤） |
-| PATCH | `/plans/{id}/tasks/{taskId}` | 拖拽调整 `{resourceId,startTs}`，返回校验结果 |
-| POST | `/plans/{id}/tasks/{taskId}/lock` | 锁定/解锁（P1，P0 不开放） |
-| POST | `/plans/{id}/validate` | 发布前校验 |
-| POST | `/plans/{id}/publish` | 发布 |
-| POST | `/plans/{id}/dispatch` | 下达 MES |
-| GET | `/analysis/load` | 负荷分析 |
-| GET | `/analysis/unscheduled` | 未排清单 |
+| PUT | `/orders/{id}/due` | 改期 |
+| PUT | `/orders/{id}/qty` | 改量 |
+| POST | `/orders/{id}/split` | 拆分 `{items:[{qty,dueDate}]}` |
+| POST | `/orders/{id}/merge` | 合并多单 |
+| POST | `/orders/{id}/cancel` | 撤销 |
+| POST | `/orders/batch/priority` | 批量改优先级 |
 
-### 5.3 甘特数据接口示例
+**排产任务（E3）**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/scheduling/params` | 默认参数（时间范围、策略、权重） |
+| POST | `/scheduling/runs` | 发起排产，body 为 `EngineParams`，需 `Idempotency-Key` |
+| GET | `/scheduling/runs` | 批次列表（工作台最近批次） |
+| GET | `/scheduling/runs/{id}` | 进度、状态、结果摘要、得分 |
+| GET | `/scheduling/runs/{id}/log` | 执行日志 |
+| POST | `/scheduling/runs/{id}/cancel` | 取消 |
+
+**计划工作台（E4）**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/plans` | 计划版本列表 |
+| GET | `/plans/{id}/tasks` | 甘特数据（时间窗 + 资源过滤） |
+| GET | `/plans/{id}/tasks/{taskId}` | 任务详情与决策依据 |
+| PATCH | `/plans/{id}/tasks/{taskId}` | 拖拽调整，`?mode=check\|commit`，语义见 §5.3 |
+| POST | `/plans/{id}/tasks/{taskId}/validate` | 单任务冲突校验（不修改） |
+| POST | `/plans/{id}/tasks/manual` | 手工插单，`source=MANUAL` |
+| POST | `/plans/{id}/tasks/{taskId}/lock` | 锁定/解锁（**P1，P0 不开放**） |
+
+**发布与执行（E5）**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/plans/{id}/versions` | 版本列表与对比元数据 |
+| POST | `/plans/{id}/rollback` | 回滚到上一版本 |
+| POST | `/plans/{id}/validate` | 发布前校验（硬约束、未排、主数据） |
+| POST | `/plans/{id}/submit` | 提交审批 |
+| POST | `/plans/{id}/approve` | 批准 |
+| POST | `/plans/{id}/reject` | 退回 |
+| POST | `/plans/{id}/publish` | 发布（前置：审批通过 + 校验通过） |
+| GET | `/plans/{id}/publish-record` | 发布记录 |
+| POST | `/plans/{id}/dispatch` | 下达 MES，需 `Idempotency-Key` |
+| GET | `/plans/{id}/dispatch-records` | 下达回执与重试记录 |
+
+**分析与平台（E6/E7）**
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/analysis/kpi` | 工作台 KPI |
+| GET | `/analysis/load` | 负荷分析与超载清单 |
+| GET | `/analysis/unscheduled` | 未排清单（原因码分组） |
+| GET | `/dict/reason-codes` | 未排原因码字典 |
+| POST | `/analysis/export` | 报表导出（plan/load/unscheduled） |
+| GET | `/audit-logs` | 审计日志查询 |
+| GET | `/integrations/tasks` | 集成同步任务列表 |
+| POST | `/integrations/tasks/{id}/retry` | 重试失败任务 |
+
+### 5.3 关键写接口语义
+
+**幂等**：`POST /scheduling/runs` 与 `POST /plans/{id}/dispatch` 必须带 `Idempotency-Key`。同一 key 重复请求返回首次结果，不产生第二条 `plan_run` / `dispatch_record`。数据库侧另有唯一约束兜底（见 §3.5）。
+
+**取消**：`POST /scheduling/runs/{id}/cancel` 表示**丢弃本次写入**——版本标记 `CANCELLED`，不产生半成品 `plan_task`。任务检查点每 N 单一次，取消后 30 秒内 `status=CANCELLED`。
+
+**拖拽（GB-05）**：采用「单任务试算、冲突拒绝、不做自动级联」语义：
+
+```
+PATCH /api/v1/plans/{id}/tasks/{taskId}?mode=check|commit
+Body: { "resourceId": 12, "startTs": "2024-11-18T09:00:00+08:00" }
+```
+
+- `mode=check`：只试算，不落库；返回是否可接受、冲突列表与建议位置。
+- `mode=commit`：校验通过才写入；返回 `{task, affectedTasks, violations, suggestion}`。
+- 换资源时必须把新旧资源上前后邻居的换型差量纳入校验（见 I8）。
+- 服务端 `p95 ≤ 300ms`，网络耗时另计；前端在等待期间显示拖影。
+
+```json
+{
+  "code": 0,
+  "data": {
+    "accepted": false,
+    "task": {"id": 88001, "resourceId": 12, "start": "2024-11-18T09:00:00+08:00"},
+    "affectedTasks": [{"id": 88002, "start": "2024-11-18T11:00:00+08:00"}],
+    "violations": [{"code": "RES_002", "message": "与 SO-2024-1190/OP20 重叠", "taskIds": [88002]}],
+    "suggestion": {"resourceId": 12, "startTs": "2024-11-18T13:00:00+08:00"}
+  }
+}
+```
+
+**发布**：`POST /plans/{id}/publish` 的前置条件为 `status=IN_REVIEW` 且 `POST /validate` 无阻断项；发布后 `plan_version.frozen=true`，禁止 UPDATE，需调整则新建版本。
+
+### 5.4 甘特数据接口示例
+
 
 ```json
 GET /api/v1/plans/1201/tasks?from=2024-11-18T00:00:00%2B08:00&to=2024-11-25T00:00:00%2B08:00&resourceIds=1,2,3

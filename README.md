@@ -5,7 +5,8 @@
 ## 文档
 
 - [APS 排产系统 · 产品设计](docs/product/aps-product-design.md) — 产品定位、功能架构、数据模型、引擎设计、迭代路线
-- [P0 功能清单与验收标准](docs/product/p0-backlog.md) — 可开发粒度的功能拆解、工作量、接口与里程碑
+- [P0 功能清单与验收标准](docs/product/p0-backlog.md) — 可开发粒度的功能拆解、工作量与里程碑
+- [P0 需求追溯矩阵](docs/product/traceability-matrix.md) — 45 项 Must 到页面/接口/数据表的逐一映射
 - [技术方案（P0）](docs/tech/technical-design.md) — 技术选型、数据模型 DDL、引擎算法、API 契约、甘特实现、性能边界
 - [P0 方案评审报告](docs/review/p0-review.md) — 7 项阻断问题、10 项重要问题、修正计划与工期重估
 
