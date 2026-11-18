@@ -242,7 +242,7 @@ CREATE TABLE ord_material_requirement (
 CREATE TABLE plan_run (
   id           BIGSERIAL PRIMARY KEY,
   run_no       VARCHAR(64) NOT NULL UNIQUE,
-  params       JSONB NOT NULL,                   -- 计划范围、策略、权重、冻结区
+  params       JSONB NOT NULL,                   -- 计划范围、策略、权重（冻结区 P1 再加）
   input_digest VARCHAR(64) NOT NULL,             -- 输入快照哈希，判重与复现
   status       VARCHAR(16) NOT NULL DEFAULT 'QUEUED',
   -- QUEUED/RUNNING/SUCCEEDED/FAILED/CANCELLED
@@ -277,7 +277,7 @@ CREATE TABLE plan_task (
   start_ts    TIMESTAMPTZ NOT NULL,
   end_ts      TIMESTAMPTZ NOT NULL,
   seq_no      INT NOT NULL,                      -- 资源上的加工顺序
-  locked      BOOLEAN NOT NULL DEFAULT FALSE,
+  locked      BOOLEAN NOT NULL DEFAULT FALSE,    -- P0 恒为 false，P1 启用
   source      VARCHAR(16) NOT NULL DEFAULT 'ENGINE',  -- ENGINE/MANUAL
   CHECK (end_ts > start_ts)
 );
@@ -318,7 +318,7 @@ record EngineInput(
     Map<Long, List<CalendarSlot>> calendar,   // 资源 -> 可工作时间段（已展开停机）
     Map<String, List<Long>> resourceByCapability,
     SetupMatrix setupMatrix,
-    EngineParams params                // 时间窗、冻结区、权重、正/倒排
+    EngineParams params                // 时间窗、权重、正/倒排（冻结区/固定任务 P1）
 ) {}
 
 record EngineResult(
@@ -377,7 +377,7 @@ record EngineResult(
 | 前驱取时间相邻 | 取该资源上 `end <= st` 的最后一个任务，不能取插入顺序的最后一个；同族显式 0 换型；矩阵缺项回落工序准备时间并计数告警，不用魔法默认值 |
 | 加工可跨班次 | `peek_span` 在日历窗口内累计消耗，产出多段占用；换型则用 `peek_single` 要求整段落在一个班次内 |
 | 订单原子性 | 逐单暂存，全部工序成功才提交；任一道失败整单回滚（逆序还原空闲区间），并记录首个卡点工序 |
-| 冻结区 | 冻结区内的已发布任务先占位，新任务只能排在冻结区之后 |
+| 冻结区（P1） | 冻结区需要「固定任务占位 + 空隙插入」，与增量排产同批实现。P0 的冻结只做发布后版本只读，引擎不接收 fixedTasks |
 | 批量与效率 | 工时 `ceil(max(qty, min_batch) × std_time / efficiency)`；`capacity>1` 在 P0 显式拒绝，要求拆成独立机台 |
 | 可中断 | 每处理 N 个订单检查取消标志，写入进度 |
 | 结果确定性 | 同输入同参数结果稳定：候选排序用稳定的 tie-breaker（资源 code），禁用哈希顺序依赖 |
@@ -426,7 +426,7 @@ P0 五类硬约束：工序顺序、资源互斥、资源日历、物料齐套�
 | POST | `/scheduling/runs/{id}/cancel` | 取消 |
 | GET | `/plans/{id}/tasks` | 甘特数据（时间窗、资源过滤） |
 | PATCH | `/plans/{id}/tasks/{taskId}` | 拖拽调整 `{resourceId,startTs}`，返回校验结果 |
-| POST | `/plans/{id}/tasks/{taskId}/lock` | 锁定/解锁 |
+| POST | `/plans/{id}/tasks/{taskId}/lock` | 锁定/解锁（P1，P0 不开放） |
 | POST | `/plans/{id}/validate` | 发布前校验 |
 | POST | `/plans/{id}/publish` | 发布 |
 | POST | `/plans/{id}/dispatch` | 下达 MES |
@@ -529,7 +529,7 @@ services:
 1. 建库建表 + 主数据 CRUD + Excel 导入（第 1–2 周）
 2. 订单接入 + 订单池 + 齐套（第 2–4 周）
 3. 引擎：日历展开 → 单资源 slot 查找 → 全量排产 → 约束校验（第 4–8 周）
-4. 甘特只读 → 拖拽 → 锁定（第 8–12 周）
+4. 甘特只读 → 拖拽（第 8–12 周），锁定与冻结随 P1 增量排产一起做
 5. 发布审批 + 下达 + 分析（第 12–15 周）
 6. 真实数据压测与调优（第 15–16 周）
 
@@ -571,6 +571,6 @@ v1 的三个缺陷在 v2 中已修正，代价是耗时从 91ms 升到 212ms（�
 ### 12.4 仍未覆盖
 
 - 倒排模式：`EngineParams` 已留位，算法只实现正排
-- 锁定/冻结任务占位：依赖 B5 的范围决策（见评审报告）
+- 锁定/冻结任务占位：已决策降到 P1，P0 引擎不接收 fixedTasks
 - 局部改进（换型合并、负荷均衡）：P1
 - 多资源占用（模具/人员）：依赖 B7 的 `plan_task_resource` 改造

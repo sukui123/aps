@@ -563,8 +563,8 @@
             <span class="lg"><i class="sw" style="background:#a7f3d0"></i>高优先级</span>
             <span class="lg"><i class="sw" style="background:#fcd34d"></i>换型</span>
             <span class="lg"><i class="sw" style="background:#fee2e2;border:1px dashed #dc2626"></i>约束冲突</span>
-            <span class="lg">🔒 已锁定</span>
-            <span style="margin-left:auto">硬约束违反 <b style="color:#dc2626">2</b> · 已锁定 <b>4</b></span>
+            <span class="lg">🔒 已锁定（P1 不开放）</span>
+            <span style="margin-left:auto">硬约束违反 <b style="color:#dc2626">2</b> · 已锁定 <b>0</b></span>
           </div>
         </div>
       </section>
@@ -622,7 +622,7 @@
             <div class="card-body">
               <div class="stat-line"><span>硬约束校验</span><span><span class="tag ok">通过</span> 0 违反</span></div>
               <div class="stat-line"><span>未排订单</span><span><span class="tag warn">37 张</span> 需确认是否接受</span></div>
-              <div class="stat-line"><span>锁定冲突</span><span><span class="tag ok">通过</span> 4 个锁定任务位置未变</span></div>
+              <div class="stat-line"><span>锁定冲突</span><span><span class="tag gray">P1</span> 锁定能力暂不开放</span></div>
               <div class="stat-line"><span>主数据完整性</span><span><span class="tag danger">2 项异常</span> 缺工艺、缺工时</span></div>
               <div style="margin-top:14px;padding:11px 13px;border-radius:8px;background:#fef3e2;color:#8a4a06;font-size:12px">
                 发现 2 条主数据异常，建议先修复再发布，否则相关订单将持续无法排产。
@@ -842,17 +842,17 @@ const TASKS = [
   {r:0, s:8,  d:6,  order:'SO-1183', op:'OP20 贴片',  kind:'hi',   locked:false, conflict:false},
   {r:0, s:14, d:8,  order:'SO-1190', op:'OP20 贴片',  kind:'norm', locked:false, conflict:false},
   {r:0, s:26, d:6,  order:'SO-1205', op:'OP20 贴片',  kind:'norm', locked:false, conflict:false},
-  {r:1, s:6,  d:6,  order:'SO-1176', op:'OP20 贴片',  kind:'norm', locked:true,  conflict:false},
+  {r:1, s:6,  d:6,  order:'SO-1176', op:'OP20 贴片',  kind:'norm', locked:false, conflict:false},
   {r:1, s:13, d:7,  order:'SO-1201', op:'OP20 贴片',  kind:'setup',locked:false, conflict:false},
   {r:1, s:34, d:9,  order:'SO-1218', op:'OP20 贴片',  kind:'norm', locked:false, conflict:false},
   {r:2, s:7,  d:8,  order:'SO-1155', op:'OP10 下料',  kind:'norm', locked:false, conflict:false},
   {r:2, s:16, d:8,  order:'SO-1168', op:'OP10 下料',  kind:'hi',   locked:false, conflict:false},
   {r:2, s:30, d:9,  order:'SO-1183', op:'OP10 下料',  kind:'norm', locked:false, conflict:true},
-  {r:3, s:8,  d:8,  order:'SO-1140', op:'OP10 下料',  kind:'norm', locked:true,  conflict:false},
+  {r:3, s:8,  d:8,  order:'SO-1140', op:'OP10 下料',  kind:'norm', locked:false, conflict:false},
   {r:3, s:22, d:8,  order:'SO-1190', op:'OP10 下料',  kind:'norm', locked:false, conflict:false},
   {r:3, s:40, d:8,  order:'SO-1205', op:'OP10 下料',  kind:'setup',locked:false, conflict:false},
   {r:4, s:12, d:8,  order:'SO-1155', op:'OP30 装配',  kind:'norm', locked:false, conflict:false},
-  {r:4, s:24, d:8,  order:'SO-1176', op:'OP30 装配',  kind:'hi',   locked:true,  conflict:false},
+  {r:4, s:24, d:8,  order:'SO-1176', op:'OP30 装配',  kind:'hi',   locked:false, conflict:false},
   {r:4, s:40, d:6,  order:'SO-1183', op:'OP30 装配',  kind:'norm', locked:false, conflict:false},
   {r:5, s:10, d:8,  order:'SO-1168', op:'OP30 装配',  kind:'norm', locked:false, conflict:false},
   {r:5, s:16, d:8,  order:'SO-1201', op:'OP30 装配',  kind:'norm', locked:false, conflict:true},
@@ -946,12 +946,13 @@ function openDrawer(t){
     (t.conflict
       ? '<div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:#fee2e2;color:#991b1b;font-size:12px">与同资源的另一任务时间重叠，违反「资源互斥」硬约束。<br><br>建议：顺延 2 小时 / 换至 SMT-02 / 拆批。</div>'
       : '<div style="margin-top:12px;padding:10px 12px;border-radius:8px;background:#eef3ff;color:#1e3a8a;font-size:12px">候选资源：'+RESOURCES[t.r].name+'（能力匹配、日历可用、物料齐套）</div>');
-  document.getElementById('dwLock').textContent = t.locked ? '解锁任务' : '锁定任务';
+  const lk=document.getElementById('dwLock');
+  lk.textContent='锁定（P1 不开放）'; lk.disabled=true; lk.style.opacity=.5; lk.style.cursor='not-allowed';
   document.getElementById('drawer').classList.add('open');
 }
 function closeDrawer(){ document.getElementById('drawer').classList.remove('open'); }
 function toggleLock(){
-  if(!currentTask) return;
+  return;  // 锁定已降到 P1，原型不开放
   currentTask.locked = !currentTask.locked;
   document.getElementById('dwLock').textContent = currentTask.locked ? '解锁任务' : '锁定任务';
   renderGantt();
