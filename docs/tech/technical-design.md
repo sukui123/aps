@@ -333,25 +333,30 @@ record EngineResult(
 
 ```
 1. 预处理
-   a. 展开订单 → 工序实例（工时 = qty × std_time）
-   b. 资源日历展开为可用时间段数组（去掉停机、非工作日）
-   c. 按优先级 + 交期排序订单
+   a. 展开订单 → 工序实例（工时 = ceil(max(qty, min_batch) × std_time / efficiency)）
+   b. 资源日历展开为可用时间窗数组（去掉停机、非工作日）
+   c. 按 优先级 → 交期 → 订单号 排序（订单号作为最终 tie-breaker，保证确定性）
 
-2. 逐单逐工序排产（正排）
+2. 逐单排产（正排，订单级事务）
    for order in orders:
-     prev_end = max(now, freeze_end, order.material_ready)
+     cursor = max(plan_start, freeze_end, order.material_ready)
+     pending = []                       -- 本单已排工序，暂存不提交
      for op in order.operations (按 seq):
-       candidates = resources matching op.resource_group
-       if candidates empty: unschedule(order, "RES_002"); break
+       if no candidate resource: rollback(pending); unschedule("RES_002"); next order
        best = null
-       for res in candidates sorted by (负荷低, 换型少, 距离近):
-         slot = find_earliest_slot(res, prev_end, op.duration, op.setup, order.family)
-         if slot != null and score(slot) > score(best): best = slot
-       if best == null:
-         unschedule(order, "CAP_005"); break
-       assign(op, best)
-       prev_end = best.end
-     if order.end > order.due: mark_late(order)   -- 仍保留，计入软约束惩罚
+       for res in candidates:
+         st = next_free_start(res.free, cursor)        -- 跳过已占用区间
+         setup = matrix(res, prev_family(res, st), order.family)
+         if setup > 0:
+           st = peek_single(res.free, st, setup)       -- 换型必须整段落在工作时段
+           if st == null: continue
+         segs = peek_span(res.free, st + setup, duration)  -- 加工可跨班次，返回分段
+         if segs == null: continue
+         best = min(best, key=(segs[-1].end, setup, res.code))
+       if best == null: rollback(pending); unschedule("CAP_005"); next order
+       commit(best)  -- 同时切掉换型区间与各加工分段
+       pending.append(task); cursor = task.end
+     emit(pending)                      -- 全部工序成功才落库
 
 3. 局部改进（可选，限时）
    a. 换型合并：同资源相邻任务按 family 聚类，尝试交换顺序降低 setup
@@ -359,7 +364,7 @@ record EngineResult(
    c. 每次改动后跑增量约束校验，失败则回滚
 
 4. 硬约束校验（独立组件，全量跑一遍）
-5. 输出任务、未排清单、得分、违规列表
+5. 输出任务、未排清单（结构化原因）、得分、违规列表
 ```
 
 ### 4.3 关键实现点
@@ -368,9 +373,12 @@ record EngineResult(
 |---|---|
 | `find_earliest_slot` 性能 | 每个资源维护**有序空闲区间列表**（`TreeMap<Instant, Interval>`），查询 O(log n + k)，避免逐分钟扫描 |
 | 候选评估的副作用 | 查询（peek）与占用（commit）必须分离。评估多个候选资源时不能修改空闲区间，否则会出现“评估即占用”，实际只用到第一个资源（原型中已踩坑并修复） |
-| 换型时间 | 取该资源上“前一个任务的 family → 当前 family”的 setup，首个任务用默认 setup |
+| 换型必须占位 | 换型是独立占用块，先 commit `[st, st+setup]` 再 commit 加工分段。只做“起点偏移”不占位，会让后续任务压进换型窗口，“硬约束零违反”变成自证 |
+| 前驱取时间相邻 | 取该资源上 `end <= st` 的最后一个任务，不能取插入顺序的最后一个；同族显式 0 换型；矩阵缺项回落工序准备时间并计数告警，不用魔法默认值 |
+| 加工可跨班次 | `peek_span` 在日历窗口内累计消耗，产出多段占用；换型则用 `peek_single` 要求整段落在一个班次内 |
+| 订单原子性 | 逐单暂存，全部工序成功才提交；任一道失败整单回滚（逆序还原空闲区间），并记录首个卡点工序 |
 | 冻结区 | 冻结区内的已发布任务先占位，新任务只能排在冻结区之后 |
-| 批量 | 工时按 `qty × std_time`，若 `qty < min_batch` 按 min_batch 计 |
+| 批量与效率 | 工时 `ceil(max(qty, min_batch) × std_time / efficiency)`；`capacity>1` 在 P0 显式拒绝，要求拆成独立机台 |
 | 可中断 | 每处理 N 个订单检查取消标志，写入进度 |
 | 结果确定性 | 同输入同参数结果稳定：候选排序用稳定的 tie-breaker（资源 code），禁用哈希顺序依赖 |
 
@@ -529,21 +537,40 @@ services:
 
 ---
 
-## 12. 算法原型验证
+## 12. 算法原型验证（v2）
 
-`prototypes/scheduler_demo.py` 用纯 Python（无依赖）实现了 4.2 节的启发式骨架，可直接运行验证：
+`prototypes/scheduler_demo.py` 实现了 4.2 节算法骨架，并内置 5 个回归用例，可直接运行：
 
 ```bash
-python3 prototypes/scheduler_demo.py
+python3 prototypes/scheduler_demo.py     # 退出码 0 = 用例全通过
 ```
 
-实测结果（本机单线程）：
+### 12.1 回归用例
+
+| 用例 | 验证点 | 结果 |
+|---|---|---|
+| B1 换型占位 | 换型区间被真实占用，后续任务不得压入 | PASS |
+| B2 跨班次加工 | 600 分钟工序在 8h 单班下跨天完成，不再误判 CAP_005 | PASS |
+| B3 订单原子性 | 第二道工序排不下时，第一道整单回滚、空闲区间还原 | PASS |
+| 同族免换型 | 同 family 连续生产 setup = 0 | PASS |
+| 校验器负向 | 人为注入重叠，校验器必须报错 | PASS |
+
+### 12.2 实测数据（本机单线程）
 
 | 场景 | 规模 | 耗时 | 结果 |
 |---|---|---|---|
-| 演示 | 24 单 × 3 工序 = 72 任务，6 资源 | 2.4 ms | 72/72 排上，硬约束 0 违反 |
-| 压测 | 400 单 × 5 工序 = 2000 任务，12 资源 | 91 ms | 951 排上 / 241 未排（窗口产能不足），硬约束 0 违反 |
+| 演示 | 24 单 × 3 工序 = 72 任务，6 资源 | 3.1 ms | 72/72 排上，0 违反，换型 28 次 |
+| 压测 | 300 单 × 5 工序 = 1500 任务，10 资源 | 212 ms | 990 排上 / 102 单未排，0 违反，占用率 97% |
 
-吞吐约 **1 万任务/秒**。按此推算，1 万工序的主要耗时不在算法本身，而在数据加载与落库；5 分钟目标余量充足。
+压测为**接近饱和**场景：加工 + 换型占用已达总可用工时的 97%，未排全部为 `CAP_005`（产能不足），符合预期。吞吐约 4,700 任务/秒，外推到 1 万工序约 2 秒，5 分钟目标余量充足——主要耗时会在数据加载与落库，而非算法。
 
-原型暴露的一个真实问题已写回 4.3：**候选资源评估必须无副作用**，否则会“评估即占用”，导致只用第一个资源、产能利用率腰斩。这类问题在 Java 实现里同样会出现，评审时需重点检查。
+### 12.3 相比 v1 的变化
+
+v1 的三个缺陷在 v2 中已修正，代价是耗时从 91ms 升到 212ms（规模不同，不可直接比较）：换型占位增加了时间轴切分，跨班次改为分段累计，订单事务增加了暂存与回滚。这个开销是必要的——v1 的“0 违反”建立在“换型不占位”之上，不成立。
+
+### 12.4 仍未覆盖
+
+- 倒排模式：`EngineParams` 已留位，算法只实现正排
+- 锁定/冻结任务占位：依赖 B5 的范围决策（见评审报告）
+- 局部改进（换型合并、负荷均衡）：P1
+- 多资源占用（模具/人员）：依赖 B7 的 `plan_task_resource` 改造
