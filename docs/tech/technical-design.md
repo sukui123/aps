@@ -294,6 +294,38 @@ CREATE TABLE plan_task_trace (
 );
 ```
 
+### 3.5 P0 补充表（评审 B4 / B6）
+
+> 完整可执行 DDL 见 [`db/migration/V1__p0_baseline.sql`](../../db/migration/V1__p0_baseline.sql)，共 43 张表。本节只列新增部分，**以迁移脚本为单一事实源**。
+
+| 分组 | 表 | 解决的问题 |
+|---|---|---|
+| 组织 | `md_plant` | 行级数据权限与多工厂的落点（I3） |
+| 日历 | `md_calendar_exception` | 加班、半天班、临时开线、保养（S1） |
+| 物料 | `md_bom` / `md_bom_line` | 齐套需要 BOM 与用量，支持 `at_op_seq` 工序级齐套（B7 部分） |
+| 工艺 | `md_routing_alt` / `md_alt_resource` / `md_alt_routing` | 替代资源与替代路线（MD-02/MD-03） |
+| 库存 | `inv_stock` / `inv_incoming` | 齐套的可用量与到料计划来源 |
+| 排产 | `plan_run_input` | 输入快照，保证历史可回放（I5） |
+| 排产 | `plan_task_segment` | 跨班次任务的加工分段（B2） |
+| 排产 | `plan_task_resource` | 多资源占用，P1 启用（B7） |
+| 未排 | `plan_unscheduled` / `dict_reason_code` | 未排订单的原因落点与码表（B4） |
+| 审批 | `plan_approval` | 多级审批与意见（PB-03） |
+| 发布 | `plan_publish` | 发布记录与生效时点（PB-05） |
+| 下达 | `dispatch_record` / `dispatch_item` | 下达回执、重试与幂等（PB-04、I2） |
+| 权限 | `sys_user` / `sys_role` / `sys_user_role` / `sys_permission` / `sys_role_permission` / `sys_user_data_scope` | 登录、RBAC 与工厂/车间数据权限（PF-01/02） |
+| 审计 | `audit_log` | 关键操作留痕（PF-03） |
+| 幂等 | `idempotency_record` | 接口级幂等键（I2） |
+
+**新增的关键约束**
+
+| 约束 | 作用 |
+|---|---|
+| `UNIQUE INDEX uq_order_src (src_system, src_id) WHERE src_id IS NOT NULL` | 重复同步不产生重复订单 |
+| `UNIQUE INDEX uq_run_singleflight (plant_id) WHERE status IN ('QUEUED','RUNNING')` | 同一工厂同时只允许一个排产任务 |
+| `UNIQUE INDEX uq_version_published (plant_id, horizon_start) WHERE status='PUBLISHED'` | 同一计划起点只允许一个已发布版本 |
+| `dispatch_record.idempotency_key UNIQUE` | 下达重试不产生重复工单 |
+| `plan_task` 冗余 `item_code/family/qty/duration_min` | 主数据变更后历史计划语义不漂移（I5） |
+
 ### 3.4 数据设计要点
 
 1. **工序实例与主数据分离**：`ord_order_operation` 是订单展开后的快照，主数据改了不影响历史计划。

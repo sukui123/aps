@@ -9,6 +9,11 @@
 - [技术方案（P0）](docs/tech/technical-design.md) — 技术选型、数据模型 DDL、引擎算法、API 契约、甘特实现、性能边界
 - [P0 方案评审报告](docs/review/p0-review.md) — 7 项阻断问题、10 项重要问题、修正计划与工期重估
 
+## 数据库
+
+- [P0 基线 DDL](db/migration/V1__p0_baseline.sql) — PostgreSQL 16，43 张表，Flyway `V1__p0_baseline.sql`
+- [DDL 静态校验](db/validate_schema.py) — 无依赖，检查括号配平、表/列重复、外键与索引引用，`python3 db/validate_schema.py`
+
 ## 原型
 
 - [P0 交互原型](docs/prototype/p0-prototype.html) — 工作台、订单池、排产任务、计划甘特、未排清单、发布审批、主数据、负荷分析（单文件，浏览器直接打开；页面数值为布局示意）
