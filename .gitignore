@@ -1,0 +1,37 @@
+# ---- 构建产物 ----
+**/target/
+frontend/dist/
+frontend/node_modules/
+*.tsbuildinfo
+
+# ---- 本地环境 / 敏感配置（绝不提交）----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.jks
+*.p12
+
+# ---- 运行时数据（本地 FS 文件存储 / PG 数据）----
+data/
+deploy/pgdata/
+
+# ---- pnpm ----
+.pnpm-store/
+frontend/.pnpm-store/
+pnpm-debug.log*
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# ---- 日志 ----
+*.log
+logs/
+
+# CI workflow 需有 workflow scope 的凭证单独推送（平台 token 仅 repo scope）
+.github/workflows/

@@ -1,0 +1,20 @@
+# 本地/沙箱开发 profile：只覆盖非敏感默认值；数据库与 JWT 仍走 APS_* 环境变量注入。
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 5
+  jackson:
+    serialization:
+      indent-output: true
+
+logging:
+  level:
+    root: INFO
+    com.aps: DEBUG
+    org.mybatis: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env,configprops

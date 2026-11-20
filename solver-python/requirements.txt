@@ -1,0 +1,6 @@
+# Python 参考实现 / 算法基准（tooling，不进生产链路，技术方案 §1.10）
+# 用途：OR-Tools Python 快速验证建模、基准回放、结果对照
+ortools>=9.8,<10
+numpy>=1.24
+pandas>=2.0
+pytest>=8.0
