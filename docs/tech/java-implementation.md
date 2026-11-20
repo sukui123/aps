@@ -107,6 +107,18 @@ export APS_DB_PASSWORD='...'
 注意：目前 API 仍是内存态，尚未引入 PostgreSQL 驱动与数据源；配置文件先就位，
 等持久化实现接上后直接生效。
 
+## 别人拿到工程后怎么跑
+
+每个会话是独立 Docker，**本地被忽略的配置不会跟着仓库走**。仓库里只有模板，使用者各自配置：
+
+| 情况 | 怎么做 |
+|---|---|
+| 自己起本地库（最省事） | `docker compose up -d`，用仓库里的 `docker-compose.yml`（账号密码仅用于本地容器） |
+| 连团队开发库 | 在自己的会话里把连接信息发给助手，助手写到**那个会话自己的**忽略文件；或设环境变量 |
+| CI / 生产 | 平台 secrets 注入 `APS_DB_URL` / `APS_DB_USER` / `APS_DB_PASSWORD`，不落盘 |
+
+也就是说：配置不需要从当前项目“传过去”，每个环境各自提供。仓库保证的是——代码和模板齐全、密码不在 Git 里。
+
 ## 下一步
 
 1. 接入 PostgreSQL，跑 `V1__p0_baseline.sql`，补 Flyway/Spring Data JDBC。

@@ -1,0 +1,22 @@
+# 本地开发用数据库：任何人 clone 后 docker compose up -d 即可获得 PostgreSQL
+# 这里的账号密码只用于本地容器，不是任何外部/生产凭据
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: aps-dev-db
+    environment:
+      POSTGRES_DB: aps
+      POSTGRES_USER: aps
+      POSTGRES_PASSWORD: aps_local_dev_only
+    ports:
+      - "5432:5432"
+    volumes:
+      - aps_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aps -d aps"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  aps_db_data:
