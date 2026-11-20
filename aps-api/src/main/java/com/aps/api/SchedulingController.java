@@ -58,7 +58,7 @@ public class SchedulingController {
     }
 
     @GetMapping("/scheduling/runs/{id}")
-    public Map<String, Object> get(@PathVariable String id) {
+    public Map<String, Object> get(@PathVariable("id") String id) {
         Map<String, Object> run = runs.get(id);
         return run == null ? wrap(Map.of("error", "not found")) : wrap(run);
     }

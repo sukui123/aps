@@ -31,6 +31,21 @@ aps/
 | 校验器负向检测 | 通过 |
 | 压测 | 300 单 / 1375 任务 / 50 ms，硬约束 0 违反 |
 | 可执行 jar | `aps-api/target/aps-api-0.1.0-SNAPSHOT.jar`（19 MB） |
+| HTTP 冒烟 | KPI、发起排产、幂等重放、按 id 查询、未找到分支全部返回预期结果 |
+
+### HTTP 冒烟实测
+
+```
+GET  /analysis/kpi          {"runs":0,"orders":12}
+POST /scheduling/runs       RUN-001，36 任务，0 未排，0 违反
+POST 同 Idempotency-Key     返回 replayed=true，仍是 RUN-001
+GET  /runs/RUN-001          与创建结果一致
+GET  /runs/NOPE             data.error=not found
+```
+
+冒烟抓到并修复了一个真实问题：`@PathVariable` 未显式指定名称、编译未开 `-parameters`，
+导致 GET 接口 500。现已在父工程与 API 模块开启 `maven.compiler.parameters`，
+并显式写 `@PathVariable("id")`。这类问题单靠 JUnit 抓不到，必须跑真实 HTTP 链路。
 
 ## 构建与测试
 
