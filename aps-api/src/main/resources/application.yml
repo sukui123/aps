@@ -1,14 +1,97 @@
-# 公共配置：可提交到仓库，不含任何凭据
+# 公共配置（可提交）：不含任何真实凭据，只读取环境变量占位符
+# 完整变量清单见 docs/tech/environment-variables.md
 spring:
   application:
     name: aps-api
   profiles:
     active: ${APS_PROFILE:default}
+  jackson:
+    time-zone: ${APS_TZ:Asia/Shanghai}
 
 server:
   port: ${SERVER_PORT:8080}
 
-# 数据库连接等环境相关配置见 application-local.yml.example
-# 本地配置方式二选一：
-#   1) 复制 example 为 application-local.yml 并填写（该文件已被 .gitignore 忽略）
-#   2) 直接设置环境变量 APS_DB_URL / APS_DB_USER / APS_DB_PASSWORD
+logging:
+  level:
+    com.aps: ${APS_LOG_LEVEL:INFO}
+
+aps:
+  tz: ${APS_TZ:Asia/Shanghai}
+
+  # 数据库（持久化实现接上后生效）
+  database:
+    url: ${APS_DB_URL:jdbc:postgresql://localhost:5432/aps}
+    user: ${APS_DB_USER:aps}
+    password: ${APS_DB_PASSWORD:}
+    pool-max: ${APS_DB_POOL_MAX:10}
+  flyway:
+    enabled: ${APS_FLYWAY_ENABLED:true}
+    locations: ${APS_FLYWAY_LOCATIONS:file:./db/migration}
+
+  # 认证
+  security:
+    jwt-secret: ${APS_JWT_SECRET:}
+    jwt-ttl-minutes: ${APS_JWT_TTL_MINUTES:120}
+    jwt-refresh-days: ${APS_JWT_REFRESH_DAYS:7}
+
+  # 排产引擎
+  engine:
+    horizon-days: ${APS_DEFAULT_HORIZON_DAYS:7}
+    time-limit-ms: ${APS_ENGINE_TIME_LIMIT_MS:300000}
+    cancel-check-orders: ${APS_ENGINE_CANCEL_CHECK_ORDERS:50}
+    weights:
+      due: ${APS_WEIGHT_DUE:45}
+      setup: ${APS_WEIGHT_SETUP:25}
+      load: ${APS_WEIGHT_LOAD:15}
+      stability: ${APS_WEIGHT_STABILITY:15}
+
+  # 外部集成
+  integration:
+    erp:
+      enabled: ${APS_ERP_ENABLED:false}
+      base-url: ${APS_ERP_BASE_URL:}
+      token: ${APS_ERP_TOKEN:}
+      sync-cron: ${APS_ERP_SYNC_CRON:0 0 2 * * *}
+    mes:
+      enabled: ${APS_MES_ENABLED:false}
+      base-url: ${APS_MES_BASE_URL:}
+      token: ${APS_MES_TOKEN:}
+    wms:
+      enabled: ${APS_WMS_ENABLED:false}
+      base-url: ${APS_WMS_BASE_URL:}
+      token: ${APS_WMS_TOKEN:}
+    plm:
+      enabled: ${APS_PLM_ENABLED:false}
+      base-url: ${APS_PLM_BASE_URL:}
+      token: ${APS_PLM_TOKEN:}
+
+  # 文件与报表
+  files:
+    upload-dir: ${APS_UPLOAD_DIR:./data/uploads}
+    export-dir: ${APS_EXPORT_DIR:./data/exports}
+
+  # 告警
+  alert:
+    channels: ${APS_ALERT_CHANNELS:log}
+    emails: ${APS_ALERT_EMAILS:}
+    wecom-webhook: ${APS_WECOM_WEBHOOK:}
+    smtp:
+      host: ${APS_SMTP_HOST:}
+      port: ${APS_SMTP_PORT:587}
+      user: ${APS_SMTP_USER:}
+      password: ${APS_SMTP_PASSWORD:}
+
+  # P1 / P2 预留
+  cache:
+    enabled: ${APS_REDIS_ENABLED:false}
+    url: ${APS_REDIS_URL:redis://localhost:6379/0}
+  solver:
+    type: ${APS_SOLVER:heuristic}
+    time-limit-ms: ${APS_SOLVER_TIME_LIMIT_MS:60000}
+  objstore:
+    type: ${APS_OBJSTORE_TYPE:local}
+    s3:
+      endpoint: ${APS_S3_ENDPOINT:}
+      bucket: ${APS_S3_BUCKET:}
+      key: ${APS_S3_KEY:}
+      secret: ${APS_S3_SECRET:}
