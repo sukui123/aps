@@ -1,0 +1,16 @@
+# 复制为 application-local.yml 后填写真实值。
+# application-local.yml 已被 .gitignore 忽略，不会提交到仓库。
+# 更推荐用环境变量：APS_DB_URL / APS_DB_USER / APS_DB_PASSWORD
+
+spring:
+  datasource:
+    url: ${APS_DB_URL:jdbc:postgresql://localhost:5432/aps}
+    username: ${APS_DB_USER:aps}
+    password: ${APS_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+# 例如在 shell 中：
+# export APS_DB_URL=jdbc:postgresql://db.example.com:5432/aps
+# export APS_DB_USER=aps_app
+# export APS_DB_PASSWORD='your-password'
+# java -jar aps-api/target/aps-api-0.1.0-SNAPSHOT.jar --spring.profiles.active=local

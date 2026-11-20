@@ -79,6 +79,34 @@ mvn -s <settings-with-mirror> test
 Java 工程是其生产对应物：**引擎逻辑一一对应**，但 API 只实现了 3 个端点，
 后续按 [需求追溯矩阵](../product/traceability-matrix.md) 的 45 项 Must 补齐。
 
+## 数据库配置怎么给（不泄漏密码）
+
+仓库提交的是**配置模板**，不是真实凭据：
+
+| 文件 | 是否提交 | 内容 |
+|---|---|---|
+| `aps-api/src/main/resources/application.yml` | 提交 | 公共默认配置（端口、profile），无凭据 |
+| `aps-api/src/main/resources/application-local.yml.example` | 提交 | 占位符模板，说明怎么填 |
+| `aps-api/src/main/resources/application-local.yml` | **忽略** | 本地真实配置，每个人各自保管 |
+| `.env` / `.env.*` / `*.local.yml` | **忽略** | 环境变量与本地覆盖 |
+
+别人下载工程后，按模板填自己的库即可；不需要从你这个项目里拿到任何密码。
+
+```bash
+# 方式一：本地文件（不会上传）
+cp aps-api/src/main/resources/application-local.yml.example \
+   aps-api/src/main/resources/application-local.yml
+# 编辑填值，然后 --spring.profiles.active=local 启动
+
+# 方式二：环境变量（推荐，CI/生产都用这个）
+export APS_DB_URL=jdbc:postgresql://host:5432/aps
+export APS_DB_USER=aps_app
+export APS_DB_PASSWORD='...'
+```
+
+注意：目前 API 仍是内存态，尚未引入 PostgreSQL 驱动与数据源；配置文件先就位，
+等持久化实现接上后直接生效。
+
 ## 下一步
 
 1. 接入 PostgreSQL，跑 `V1__p0_baseline.sql`，补 Flyway/Spring Data JDBC。

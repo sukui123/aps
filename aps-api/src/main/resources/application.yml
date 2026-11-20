@@ -1,0 +1,14 @@
+# 公共配置：可提交到仓库，不含任何凭据
+spring:
+  application:
+    name: aps-api
+  profiles:
+    active: ${APS_PROFILE:default}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+# 数据库连接等环境相关配置见 application-local.yml.example
+# 本地配置方式二选一：
+#   1) 复制 example 为 application-local.yml 并填写（该文件已被 .gitignore 忽略）
+#   2) 直接设置环境变量 APS_DB_URL / APS_DB_USER / APS_DB_PASSWORD
