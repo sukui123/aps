@@ -1,0 +1,21 @@
+# 仅 PostgreSQL 15 本地兜底（技术方案 §8.5 情形 b）
+# 平台 APS 测试沙箱已注入 APS_DB_*，无需也不应启动此容器。
+# 真实密码由 .env 或平台注入，本文件不含任何真实值。
+services:
+  postgres:
+    image: postgres:15
+    container_name: aps-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: aps
+      POSTGRES_USER: ${APS_DB_USER:-aps}
+      POSTGRES_PASSWORD: ${APS_DB_PASSWORD:?set APS_DB_PASSWORD in .env (never commit it)}
+    ports:
+      - "${APS_PG_PORT:-5432}:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d aps']
+      interval: 5s
+      timeout: 3s
+      retries: 10
