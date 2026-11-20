@@ -5,3 +5,8 @@ node_modules/
 target/
 dist/
 .env
+.env.*
+*.local.yml
+*.local.yaml
+application-local.yml
+application-local.yaml
