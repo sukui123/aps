@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { BrowserRouter } from 'react-router-dom';
-import { AppLayout } from './app/AppLayout';
 import { AppRoutes } from './router';
 
 const queryClient = new QueryClient({
@@ -28,9 +27,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ConfigProvider locale={zhCN} theme={theme}>
         <BrowserRouter>
-          <AppLayout>
-            <AppRoutes />
-          </AppLayout>
+          <AppRoutes />
         </BrowserRouter>
       </ConfigProvider>
     </QueryClientProvider>

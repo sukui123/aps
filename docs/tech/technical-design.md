@@ -834,6 +834,20 @@ jwt:
 
 P0 15 条接口（§5.2）均由 `aps-api` 对应 Controller 实现：订单 3 条 → M1；主数据 3 条 → M1；排产 3 条 → M2；甘特任务 → M3；发布 3 条 → M4；分析 2 条 → M4。SSE 与 auth/导入/回滚为支撑接口，随对应里程碑交付。
 
+**E7 平台与集成（M1 已落地接口，回写于 E7 实现轮）**：
+
+| Controller | 主要路由 | 权限码 | 功能 |
+|---|---|---|---|
+| `AuthController` | `POST /api/v1/auth/login`、`/logout`、`GET /me` | 白名单 / 认证 | PF-01 登录、登出黑名单、当前用户 |
+| `UserController` | `/api/v1/users` CRUD 与 `/{id}/password`、`/{id}/status` | `user:manage` | PF-01 用户/密码/启停 |
+| `RoleController` | `/api/v1/roles` | `role:manage` | PF-02 角色 |
+| `PermissionController` | `/api/v1/permissions` | `role:manage` | PF-02 权限码字典 |
+| `AuditController` | `GET /api/v1/audit`、`/audit/export` | `audit:read` / `audit:export` | PF-03 审计查询与导出 |
+| `IntegrationController` | `/api/v1/integrations/configs`、`/tasks`、`/tasks/{id}/retry` | `integration:manage` / `integration:read` | PF-04 配置、监控、人工重试 |
+| `OrderSyncController` | `POST /api/v1/orders/sync` | `order:sync` | PF-04 同步触发（双幂等） |
+
+权限码常量见 `aps-common/constant/PermissionCodes.java`；审计动作码见 `AuditActions.java`（含跨 Epic 契约 `PLAN_TASK_ADJUST`，E4 甘特拖拽落地时接线）。工厂/车间级数据权限（验收 #8）仍为过渡实现，权威映射待 E1/E2/E5 补齐业务谓词；PF-05 告警按设计延后一版。
+
 ### 9.3 验收标准追溯（P0 §8 总清单）
 
 | 验收项 | 技术方案落点 |

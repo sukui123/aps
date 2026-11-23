@@ -23,5 +23,10 @@
       <groupId>com.baomidou</groupId>
       <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
     </dependency>
+    <!-- BCrypt 口令编码端口类型在 infra 编译期可见；实现 Bean 仍由 aps-api 的 SecurityConfig 提供 -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-crypto</artifactId>
+    </dependency>
   </dependencies>
 </project>

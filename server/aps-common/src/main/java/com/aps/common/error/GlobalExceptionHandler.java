@@ -5,6 +5,7 @@ import com.aps.common.exception.BusinessException;
 import com.aps.common.result.Result;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.MDC;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -35,6 +36,13 @@ public class GlobalExceptionHandler {
                 .body(Result.fail(CommonErrorCode.PARAM_ERROR, message));
     }
 
+    /** 数据唯一约束冲突（如并发幂等）按幂等冲突 409 返回，禁止退化成 90000/500。 */
+    @ExceptionHandler(DuplicateKeyException.class)
+    public ResponseEntity<Result<Void>> handleDuplicateKey(DuplicateKeyException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(Result.fail(CommonErrorCode.IDEMPOTENCY_CONFLICT, "重复提交冲突，请重试"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Result<Void>> handleUnexpected(Exception e, HttpServletRequest request) {
         // 不打印敏感配置值；只记录 traceId 与路径，详细堆栈交由日志框架
@@ -49,12 +57,18 @@ public class GlobalExceptionHandler {
         return fe.getField() + ": " + fe.getDefaultMessage();
     }
 
-    /** 1xxxx/4xxxx → 4xx，其余（9xxxx）→ 5xx。 */
+    /**
+     * 错误码到 HTTP 状态的映射（技术方案 §5.4，D2 修正）：
+     * 10002=未认证→401，10003=无权限→403，10004=幂等冲突→409，
+     * 10005=资源不存在→404，其余 1xxxx→400，5xxxx/9xxxx→500。
+     */
     private HttpStatus httpStatus(int code) {
-        int group = code / 10000;
-        if (group == 1 || group == 4) {
-            return HttpStatus.BAD_REQUEST;
-        }
-        return HttpStatus.INTERNAL_SERVER_ERROR;
+        return switch (code) {
+            case 10002 -> HttpStatus.UNAUTHORIZED;
+            case 10003 -> HttpStatus.FORBIDDEN;
+            case 10004 -> HttpStatus.CONFLICT;
+            case 10005 -> HttpStatus.NOT_FOUND;
+            default -> (code / 10000 == 1) ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR;
+        };
     }
 }
