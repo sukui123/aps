@@ -24,3 +24,21 @@ export interface Resource {
   enabled?: boolean;
   version?: number;
 }
+
+/** PF-01/02 登录与权限事实 */
+export interface UserProfile {
+  userId: number;
+  tenantId: number;
+  username: string;
+  displayName?: string;
+  roles: string[];
+  factoryIds: number[];
+  permissions: string[];
+}
+
+export interface LoginResponse {
+  token: string;
+  tokenType: string;
+  expiresIn: number;
+  user: UserProfile;
+}

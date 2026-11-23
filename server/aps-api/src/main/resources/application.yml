@@ -39,6 +39,11 @@ storage:
 aps:
   worker:
     poll-ms: 5000
+    enabled: true
+  # 集成凭据 AES-GCM 密钥：只从 APS_INTEGRATION_SECRET 注入；
+  # 未配置时不阻断启动，但凭据写操作 fail-fast（D3）。值永不入库/入日志。
+  integration:
+    secret: ${APS_INTEGRATION_SECRET:}
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml

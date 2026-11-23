@@ -9,6 +9,8 @@ public enum CommonErrorCode implements ErrorCode {
     FORBIDDEN(10003, "无权限"),
     IDEMPOTENCY_CONFLICT(10004, "幂等冲突"),
     NOT_FOUND(10005, "资源不存在"),
+    INTEGRATION_ERROR(50001, "集成处理失败"),
+    ADAPTER_UNAVAILABLE(50002, "数据源适配器不可用"),
     INTERNAL_ERROR(90000, "系统内部错误");
 
     private final int code;
