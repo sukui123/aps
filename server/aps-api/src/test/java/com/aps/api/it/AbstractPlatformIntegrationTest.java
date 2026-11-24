@@ -1,5 +1,7 @@
 package com.aps.api.it;
 
+import com.aps.api.config.JwtClaims;
+import com.aps.api.config.JwtTokenProvider;
 import com.aps.api.dto.LoginRequest;
 import com.aps.api.dto.SyncRequest;
 import com.aps.domain.service.IntegrationService;
@@ -17,8 +19,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -44,6 +48,8 @@ abstract class AbstractPlatformIntegrationTest {
     private JdbcTemplate jdbcTemplate;
     @Autowired
     private IntegrationService integrationService;
+    @Autowired
+    private JwtTokenProvider tokenProvider;
 
     // ---------------------------------------------------------------- helpers
 
@@ -304,5 +310,93 @@ abstract class AbstractPlatformIntegrationTest {
 
     private int retryCountOf(long taskId) {
         return jdbcTemplate.queryForObject("SELECT retry_count FROM integration_task WHERE id = ?", Integer.class, taskId);
+    }
+
+    // ---------------------------------------------------------------- 验收 #8（应用层 ABAC 工厂级数据权限）
+
+    @Test
+    void factoryScopeFiltersListToVisibleSubtree() throws Exception {
+        long tenant = tenantId("DEFAULT");
+        String prefix = unique("it_scope");
+        // 构造工厂/车间树：A(根) -> A1(子) -> A2(孙)；B(根) -> B1(子)
+        long rootA = insertResource(tenant, prefix + "_A", null);
+        long childA1 = insertResource(tenant, prefix + "_A1", rootA);
+        long grandA2 = insertResource(tenant, prefix + "_A2", childA1);
+        long rootB = insertResource(tenant, prefix + "_B", null);
+        long childB1 = insertResource(tenant, prefix + "_B1", rootB);
+        try {
+            // 用 admin 的合法身份事实，仅替换 factoryIds 为 [A]，签一个带工厂范围的 token
+            JwtClaims base = tokenProvider.parse(token("admin"));
+            String scoped = tokenProvider.createToken(new JwtClaims(
+                    base.subject(), base.tenantId(), base.username(), base.roles(),
+                    List.of(rootA), base.jti(), base.expiresAt(), base.tokenVersion()));
+
+            MvcResult result = perform(HttpMethod.GET, "/api/v1/master/resources?pageSize=200", scoped, null);
+            assertEquals(200, result.getResponse().getStatus(), result.getResponse().getContentAsString());
+            JsonNode page = json(result).path("data");
+            Set<Long> ids = new HashSet<>();
+            page.path("list").forEach(n -> ids.add(n.path("id").asLong()));
+
+            assertTrue(ids.contains(rootA), "工厂 A 根节点应可见");
+            assertTrue(ids.contains(childA1), "工厂 A 子节点应可见（子树展开）");
+            assertTrue(ids.contains(grandA2), "工厂 A 孙节点应可见（递归 CTE）");
+            assertFalse(ids.contains(rootB), "范围外工厂 B 根节点必须不可见");
+            assertFalse(ids.contains(childB1), "范围外工厂 B 子节点必须不可见");
+        } finally {
+            jdbcTemplate.update("DELETE FROM resource WHERE code LIKE ?", prefix + "_%");
+        }
+    }
+
+    @Test
+    void factoryScopeRejectsOutOfScopeGetById() throws Exception {
+        long tenant = tenantId("DEFAULT");
+        String prefix = unique("it_getscope");
+        long rootA = insertResource(tenant, prefix + "_A", null);
+        long childA1 = insertResource(tenant, prefix + "_A1", rootA);
+        long rootB = insertResource(tenant, prefix + "_B", null);
+        try {
+            JwtClaims base = tokenProvider.parse(token("admin"));
+            String scoped = tokenProvider.createToken(new JwtClaims(
+                    base.subject(), base.tenantId(), base.username(), base.roles(),
+                    List.of(rootA), base.jti(), base.expiresAt(), base.tokenVersion()));
+
+            // 范围内按 id 读取：200
+            MvcResult ok = perform(HttpMethod.GET, "/api/v1/master/resources/" + childA1, scoped, null);
+            assertEquals(200, ok.getResponse().getStatus());
+
+            // 越权按 id 读取范围外工厂：403/10003
+            MvcResult denied = perform(HttpMethod.GET, "/api/v1/master/resources/" + rootB, scoped, null);
+            assertEquals(403, denied.getResponse().getStatus());
+            assertEquals(10003, json(denied).path("code").asInt());
+        } finally {
+            jdbcTemplate.update("DELETE FROM resource WHERE code LIKE ?", prefix + "_%");
+        }
+    }
+
+    @Test
+    void noFactoryRestrictionAdminSeesWholeTenant() throws Exception {
+        long tenant = tenantId("DEFAULT");
+        String prefix = unique("it_allscope");
+        long rootA = insertResource(tenant, prefix + "_A", null);
+        long rootB = insertResource(tenant, prefix + "_B", null);
+        try {
+            String admin = token("admin");
+            MvcResult result = perform(HttpMethod.GET, "/api/v1/master/resources?pageSize=200", admin, null);
+            assertEquals(200, result.getResponse().getStatus());
+            Set<Long> ids = new HashSet<>();
+            json(result).path("data").path("list").forEach(n -> ids.add(n.path("id").asLong()));
+            assertTrue(ids.contains(rootA), "无工厂限制应可见 A");
+            assertTrue(ids.contains(rootB), "无工厂限制应可见 B");
+        } finally {
+            jdbcTemplate.update("DELETE FROM resource WHERE code LIKE ?", prefix + "_%");
+        }
+    }
+
+    private long insertResource(long tenant, String code, Long parentId) {
+        jdbcTemplate.update("INSERT INTO resource(tenant_id, code, name, type, parent_id) "
+                        + "VALUES (?, ?, ?, 'WORKSHOP', ?)",
+                tenant, code, code, parentId);
+        return jdbcTemplate.queryForObject("SELECT id FROM resource WHERE tenant_id = ? AND code = ?",
+                Long.class, tenant, code);
     }
 }
